@@ -1,6 +1,7 @@
 //  MyNetworkInterestManagement
-//  ×÷Õß£ºÖìè÷Èğ(Shepherd0619)
-//  ´´½¨ÈÕÆÚ£º2023Äê7ÔÂ25ÈÕ
+//  ä½œè€…ï¼šæœ±æ¢“ç‘(Shepherd0619)
+//  åˆ›å»ºæ—¥æœŸï¼š2023å¹´7æœˆ25æ—¥
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -16,26 +17,35 @@ public class MyNetworkInterestManagement : InterestManagement
 
     [Tooltip("Rebuild all every 'rebuildInterval' seconds.")]
     public float rebuildInterval = 1;
+
     double lastRebuildTime;
 
-    readonly Dictionary<string, HashSet<NetworkIdentity>> teamObjects = new Dictionary<string, HashSet<NetworkIdentity>>();
+    readonly Dictionary<string, HashSet<NetworkIdentity>> teamObjects =
+        new Dictionary<string, HashSet<NetworkIdentity>>();
+
     readonly Dictionary<NetworkIdentity, string> lastObjectTeam = new Dictionary<NetworkIdentity, string>();
     readonly HashSet<string> dirtyTeams = new HashSet<string>();
+    public static MyNetworkInterestManagement Instance;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     [ServerCallback]
     public override void OnSpawned(NetworkIdentity identity)
     {
+        Debug.Log("[MyNetworkInterestManagement]OnSpawned started!");
         if (!identity.TryGetComponent(out MyTeam identityMyTeam))
             return;
-
+        Debug.Log("[MyNetworkInterestManagement]OnSpawned successfully getComponent!");
         string networkTeamId = identityMyTeam.teamId;
         lastObjectTeam[identity] = networkTeamId;
-
         // Null / Empty string is never a valid teamId...do not add to teamObjects collection
         if (string.IsNullOrWhiteSpace(networkTeamId))
             return;
 
-        //Debug.Log($"TeamInterestManagement.OnSpawned {identity.name} {networkTeamId}");
+        Debug.Log($"TeamInterestManagement.OnSpawned {identity.name} {networkTeamId}");
 
         if (!teamObjects.TryGetValue(networkTeamId, out HashSet<NetworkIdentity> objects))
         {
@@ -54,6 +64,7 @@ public class MyNetworkInterestManagement : InterestManagement
     [ServerCallback]
     public override void OnDestroyed(NetworkIdentity identity)
     {
+        Debug.Log("[MyNetworkInterestManagement]OnDestroyed started!");
         // Don't RebuildSceneObservers here - that will happen in Update.
         // Multiple objects could be destroyed in same frame and we don't
         // want to rebuild for each one...let Update do it once.
@@ -61,7 +72,8 @@ public class MyNetworkInterestManagement : InterestManagement
         if (lastObjectTeam.TryGetValue(identity, out string currentTeam))
         {
             lastObjectTeam.Remove(identity);
-            if (!string.IsNullOrWhiteSpace(currentTeam) && teamObjects.TryGetValue(currentTeam, out HashSet<NetworkIdentity> objects) && objects.Remove(identity))
+            if (!string.IsNullOrWhiteSpace(currentTeam) &&
+                teamObjects.TryGetValue(currentTeam, out HashSet<NetworkIdentity> objects) && objects.Remove(identity))
                 dirtyTeams.Add(currentTeam);
         }
     }
@@ -155,35 +167,8 @@ public class MyNetworkInterestManagement : InterestManagement
         if (!identity.TryGetComponent(out MyTeam identityMyTeam))
             return true;
 
-        // ÎÒÔÚ´óÌü£¬¶Ô·½Ò²ÔÚ´óÌü
-        if (newObserverMyTeam.teamId == "Lobby" && identityMyTeam.teamId == "Lobby")
-        {
-            // ÅĞ¶ÏÖ±Ïß¾àÀë
-            return Vector3.Distance(identity.transform.position, newObserver.identity.transform.position) <= visRange;
-        }
-            
-
-        // ÎÒÔÚ´óÌü£¬¶Ô·½²»ÔÚ´óÌü
-        if (String.IsNullOrWhiteSpace(newObserverMyTeam.teamId) && !String.IsNullOrWhiteSpace(identityMyTeam.teamId))
-            return false;
-
-        // ÎÒ²»ÔÚ´óÌü£¬¶Ô·½ÔÚ´óÌü
-        if (!String.IsNullOrWhiteSpace(newObserverMyTeam.teamId) && String.IsNullOrWhiteSpace(identityMyTeam.teamId))
-            return false;
-
-        // ÎÒ²»ÔÚ´óÌü£¬¶Ô·½²»ÔÚ´óÌü
-        if (!String.IsNullOrWhiteSpace(newObserverMyTeam.teamId) && String.IsNullOrWhiteSpace(identityMyTeam.teamId))
-        {
-            if(newObserverMyTeam.teamId == identityMyTeam.teamId)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
+        Debug.Log(
+            $"TeamInterestManagement.OnCheckObserver {identity.name} {identityMyTeam.teamId} | {newObserver.identity.name} {newObserverMyTeam.teamId}");
 
         if (identityMyTeam.forceShown)
             return true;
@@ -196,10 +181,28 @@ public class MyNetworkInterestManagement : InterestManagement
         if (string.IsNullOrWhiteSpace(newObserverMyTeam.teamId))
             return false;
 
-        //Debug.Log($"TeamInterestManagement.OnCheckObserver {identity.name} {identityMyTeam.teamId} | {newObserver.identity.name} {newObserverMyTeam.teamId}");
-
-        // Observed only if teamId's match
-        return identityMyTeam.teamId == newObserverMyTeam.teamId;
+        // æˆ‘åœ¨å¤§å…ï¼Œå¯¹æ–¹ä¹Ÿåœ¨å¤§å…
+        if (newObserverMyTeam.teamId == "Lobby" && identityMyTeam.teamId == "Lobby")
+        {
+            // åˆ¤æ–­ç›´çº¿è·ç¦»
+            return Vector3.Distance(identity.transform.position, newObserver.identity.transform.position) <= visRange;
+        }
+        // æˆ‘åœ¨å¤§å…ï¼Œå¯¹æ–¹åœ¨å…¶ä»–åœ°æ–¹
+        else if (newObserverMyTeam.teamId == "Lobby" && identityMyTeam.teamId != "Lobby")
+        {
+            return false;
+        }
+        // æˆ‘åœ¨å…¶ä»–åœ°æ–¹ï¼Œå¯¹æ–¹ä¹Ÿåœ¨å¤§å…
+        else if (newObserverMyTeam.teamId != "Lobby" && identityMyTeam.teamId == "Lobby")
+        {
+            return false;
+        }
+        // å‡åœ¨å…¶ä»–åœ°æ–¹
+        else
+        {
+            // åˆ¤æ–­teamIdæ˜¯å¦ç›¸åŒ
+            return newObserverMyTeam.teamId == identityMyTeam.teamId;
+        }
     }
 
     public override void OnRebuildObservers(NetworkIdentity identity, HashSet<NetworkConnectionToClient> newObservers)
@@ -210,7 +213,7 @@ public class MyNetworkInterestManagement : InterestManagement
         {
             OnCheckObserver(identity, newObserver);
         }
-        
+
 
         // If this object doesn't have a MyTeam then it's visible to all clients
         if (!identity.TryGetComponent(out MyTeam networkTeam))
@@ -225,6 +228,7 @@ public class MyNetworkInterestManagement : InterestManagement
             AddAllConnections(newObservers);
             return;
         }
+
         /*
         // Null / Empty string is never a valid teamId
         if (string.IsNullOrWhiteSpace(networkTeam.teamId))
@@ -239,20 +243,19 @@ public class MyNetworkInterestManagement : InterestManagement
         // Add everything in the hashset for this object's current team
         foreach (NetworkIdentity networkIdentity in objects)
         {
-            // ¿´ÊÇ²»ÊÇÔÚLobby£¬Èç¹û²»ÊÇ£¬Ä¬ÈÏÈÏÎªËùÓĞÈË¶¼¿É¼û
+            // çœ‹æ˜¯ä¸æ˜¯åœ¨Lobbyï¼Œå¦‚æœä¸æ˜¯ï¼Œé»˜è®¤è®¤ä¸ºæ‰€æœ‰äººéƒ½å¯è§
             if (networkIdentity.GetComponent<MyTeam>().teamId != "Lobby")
             {
                 if (networkIdentity != null && networkIdentity.connectionToClient != null)
                 {
                     newObservers.Add(networkIdentity.connectionToClient);
                 }
-                
             }
             else
             {
                 if (networkIdentity != null && networkIdentity.connectionToClient != null)
                 {
-                    // ÅĞ¶ÏÖ±Ïß¾àÀë
+                    // åˆ¤æ–­ç›´çº¿è·ç¦»
                     if (Vector3.Distance(networkIdentity.transform.position, position) < visRange)
                         // add to result
                         newObservers.Add(networkIdentity.connectionToClient);
